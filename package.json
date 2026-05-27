@@ -9,9 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@breeztech/breez-sdk-liquid": "^0.12.3-dev1",
+    "@neondatabase/serverless": "^1.1.0",
+    "jimp": "^1.6.1",
+    "lucide-react": "^1.16.0",
     "next": "16.2.6",
+    "nostr-tools": "^2.23.5",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tesseract.js": "^7.0.0",
+    "twilio": "^6.0.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
