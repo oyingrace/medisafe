@@ -4,11 +4,11 @@ import { createBatchInvoice } from "@/lib/breez";
 import { createPendingBatch } from "@/lib/db";
 
 const payloadSchema = z.object({
-  batchId: z.string().min(6),
-  drugName: z.string().min(2),
-  manufacturer: z.string().min(2),
-  manufactureDate: z.string().min(4),
-  expiryDate: z.string().min(4),
+  batchId: z.string().trim().min(6).max(24).regex(/^[A-Za-z0-9-]+$/),
+  drugName: z.string().trim().min(2),
+  manufacturer: z.string().trim().min(2),
+  manufactureDate: z.string().trim().min(4),
+  expiryDate: z.string().trim().min(4),
 });
 
 export async function POST(req: Request) {

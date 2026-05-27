@@ -1,12 +1,23 @@
 import Link from "next/link";
+import { RecentActivity } from "@/components/RecentActivity";
 import { StatsCard } from "@/components/StatsCard";
-import { getDashboardStats } from "@/lib/db";
+import {
+  getDashboardStats,
+  getRecentBatchActivity,
+  getRecentVerificationActivity,
+} from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const stats = await getDashboardStats();
+  const [verificationRows, batchRows] = await Promise.all([
+    getRecentVerificationActivity(12),
+    getRecentBatchActivity(8),
+  ]);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 p-6">
+    <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-10 p-6 pb-12">
       <section className="rounded-2xl border border-green-200 bg-green-50 p-6">
         <h1 className="text-3xl font-bold text-green-800">MedSafe</h1>
         <p className="mt-2 text-zinc-700">
@@ -31,6 +42,8 @@ export default async function Home() {
           <StatsCard title="Open anomaly alerts" value={stats.openAlerts} />
         </div>
       </section>
+
+      <RecentActivity verificationRows={verificationRows} batchRows={batchRows} />
 
       <section className="rounded-xl border border-zinc-200 p-4">
         <h2 className="text-xl font-semibold">WhatsApp verification</h2>

@@ -1,32 +1,69 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { PaymentModal } from "@/components/PaymentModal";
 
-const initial = {
-  batchId: "",
-  drugName: "",
-  manufacturer: "",
-  manufactureDate: "",
-  expiryDate: "",
-};
+const formSchema = z.object({
+  batchId: z
+    .string()
+    .trim()
+    .min(6, "Batch ID must be at least 6 characters")
+    .max(24, "Batch ID must be 24 characters or fewer")
+    .regex(/^[A-Za-z0-9-]+$/, "Use only letters, numbers, and hyphens"),
+  drugName: z.string().trim().min(2, "Drug name is required"),
+  manufacturer: z.string().trim().min(2, "Manufacturer name is required"),
+  manufactureDate: z.string().trim().min(4, "Manufacture date is required"),
+  expiryDate: z.string().trim().min(4, "Expiry date is required"),
+});
 
 export function BatchRegistrationForm() {
-  const [form, setForm] = useState(initial);
+  const [form, setForm] = useState({
+    batchId: "",
+    drugName: "",
+    manufacturer: "",
+    manufactureDate: "",
+    expiryDate: "",
+  });
   const [invoice, setInvoice] = useState("");
   const [paymentHash, setPaymentHash] = useState("");
   const [status, setStatus] = useState<"idle" | "pending" | "paid" | "failed">("idle");
   const [nostrEventId, setNostrEventId] = useState("");
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setFieldErrors({});
+
+    const parsed = formSchema.safeParse(form);
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const path = issue.path[0];
+        if (typeof path === "string" && !errs[path]) errs[path] = issue.message;
+      }
+      setFieldErrors(errs);
+      return;
+    }
+
+    const payload = parsed.data;
     const resp = await fetch("/api/register-batch", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     const data = await resp.json();
     if (!resp.ok) {
@@ -73,26 +110,105 @@ export function BatchRegistrationForm() {
   }, [paymentHash, status, checkStatus]);
 
   return (
-    <div className="grid gap-4 md:grid-cols-2">
-      <form onSubmit={submit} className="space-y-3 rounded-xl border p-4 bg-white">
-        <h2 className="text-xl font-semibold">Register Batch</h2>
-        {Object.entries(form).map(([key, value]) => (
-          <input
-            key={key}
-            value={value}
-            onChange={(e) => setForm((old) => ({ ...old, [key]: e.target.value }))}
-            placeholder={key}
-            className="w-full rounded-md border px-3 py-2 text-sm"
-            required
-          />
-        ))}
-        <Button type="submit">Create invoice</Button>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        {nostrEventId ? <p className="text-sm text-green-700 break-all">Registered ✅ {nostrEventId}</p> : null}
-      </form>
+    <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+      <Card>
+        <CardHeader>
+          <CardTitle>Register batch</CardTitle>
+          <CardDescription>
+            We create a Lightning invoice. After payment settles, MedSafe signs a Nostr event for this batch.
+          </CardDescription>
+        </CardHeader>
+        <form onSubmit={submit}>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="batchId">
+                Batch ID <span className="text-muted-foreground font-normal">(required)</span>
+              </Label>
+              <Input
+                id="batchId"
+                name="batchId"
+                placeholder="AMX500-2024-Q1"
+                value={form.batchId}
+                onChange={(e) => setForm((o) => ({ ...o, batchId: e.target.value.toUpperCase() }))}
+                aria-invalid={Boolean(fieldErrors.batchId)}
+              />
+              {fieldErrors.batchId ? <p className="text-xs text-destructive">{fieldErrors.batchId}</p> : null}
+            </div>
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="drugName">Drug name</Label>
+              <Input
+                id="drugName"
+                name="drugName"
+                placeholder="Amoxicillin 500mg"
+                value={form.drugName}
+                onChange={(e) => setForm((o) => ({ ...o, drugName: e.target.value }))}
+                aria-invalid={Boolean(fieldErrors.drugName)}
+              />
+              {fieldErrors.drugName ? <p className="text-xs text-destructive">{fieldErrors.drugName}</p> : null}
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="manufacturer">Manufacturer</Label>
+              <Input
+                id="manufacturer"
+                name="manufacturer"
+                placeholder="e.g. Fidson Healthcare"
+                value={form.manufacturer}
+                onChange={(e) => setForm((o) => ({ ...o, manufacturer: e.target.value }))}
+                aria-invalid={Boolean(fieldErrors.manufacturer)}
+              />
+              {fieldErrors.manufacturer ? (
+                <p className="text-xs text-destructive">{fieldErrors.manufacturer}</p>
+              ) : null}
+            </div>
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="manufactureDate">Manufacture date</Label>
+              <Input
+                id="manufactureDate"
+                name="manufactureDate"
+                type="date"
+                value={form.manufactureDate}
+                onChange={(e) => setForm((o) => ({ ...o, manufactureDate: e.target.value }))}
+                aria-invalid={Boolean(fieldErrors.manufactureDate)}
+              />
+              {fieldErrors.manufactureDate ? (
+                <p className="text-xs text-destructive">{fieldErrors.manufactureDate}</p>
+              ) : null}
+            </div>
+            <div className="space-y-2 sm:col-span-1">
+              <Label htmlFor="expiryDate">Expiry date</Label>
+              <Input
+                id="expiryDate"
+                name="expiryDate"
+                type="date"
+                value={form.expiryDate}
+                onChange={(e) => setForm((o) => ({ ...o, expiryDate: e.target.value }))}
+                aria-invalid={Boolean(fieldErrors.expiryDate)}
+              />
+              {fieldErrors.expiryDate ? <p className="text-xs text-destructive">{fieldErrors.expiryDate}</p> : null}
+            </div>
+          </CardContent>
+          <CardFooter className="flex-col items-start gap-3 border-t pt-6">
+            <Button type="submit" className="bg-green-600 hover:bg-green-700">
+              Create Lightning invoice
+            </Button>
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+            {nostrEventId ? (
+              <p className="text-sm font-medium text-green-700">
+                Registered on Nostr — event id{" "}
+                <code className="rounded bg-green-50 px-1 py-0.5 text-xs">{nostrEventId}</code>
+              </p>
+            ) : null}
+          </CardFooter>
+        </form>
+      </Card>
       {invoice ? (
         <PaymentModal invoice={invoice} paymentHash={paymentHash} status={status} onCheckStatus={checkStatus} />
-      ) : null}
+      ) : (
+        <div className="hidden lg:block rounded-xl border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground leading-relaxed">
+          After you submit, the Lightning invoice card will appear here with a QR code, copy invoice, and live payment
+          status.
+        </div>
+      )}
     </div>
   );
 }
