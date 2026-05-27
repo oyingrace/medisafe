@@ -21,7 +21,7 @@ Counterfeit and substandard drugs are a major cause of preventable deaths in Afr
 
 Medsafe provides an immutable, verifiable, and accessible drug verification network powered by Nostr & Bitcoin.
 
-#How It Works 
+# How It Works 
 
 | Step | Description |
 | --- | --- |
