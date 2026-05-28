@@ -38,6 +38,7 @@ export function BatchRegistrationForm() {
   });
   const [invoice, setInvoice] = useState("");
   const [paymentHash, setPaymentHash] = useState("");
+  const [invoiceType, setInvoiceType] = useState<"bolt11" | "spark">("bolt11");
   const [status, setStatus] = useState<"idle" | "pending" | "paid" | "failed">("idle");
   const [nostrEventId, setNostrEventId] = useState("");
   const [error, setError] = useState("");
@@ -72,6 +73,8 @@ export function BatchRegistrationForm() {
     }
     setInvoice(data.invoice);
     setPaymentHash(data.paymentHash);
+    if (data.invoiceType === "spark") setInvoiceType("spark");
+    else setInvoiceType("bolt11");
     setStatus("pending");
   }
 
@@ -115,7 +118,7 @@ export function BatchRegistrationForm() {
         <CardHeader>
           <CardTitle>Register batch</CardTitle>
           <CardDescription>
-            We create a Lightning invoice. After payment settles, MedSafe signs a Nostr event for this batch.
+            We generate a payment invoice (Spark on regtest, BOLT11 on mainnet). After payment settles, MedSafe signs a Nostr event for this batch.
           </CardDescription>
         </CardHeader>
         <form onSubmit={submit}>
@@ -189,7 +192,7 @@ export function BatchRegistrationForm() {
           </CardContent>
           <CardFooter className="flex-col items-start gap-3 border-t pt-6">
             <Button type="submit" className="bg-green-600 hover:bg-green-700">
-              Create Lightning invoice
+              Create invoice
             </Button>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             {nostrEventId ? (
@@ -202,7 +205,7 @@ export function BatchRegistrationForm() {
         </form>
       </Card>
       {invoice ? (
-        <PaymentModal invoice={invoice} paymentHash={paymentHash} status={status} onCheckStatus={checkStatus} />
+        <PaymentModal invoice={invoice} paymentHash={paymentHash} status={status} invoiceType={invoiceType} onCheckStatus={checkStatus} />
       ) : (
         <div className="hidden lg:block rounded-xl border border-dashed bg-muted/20 p-6 text-sm text-muted-foreground leading-relaxed">
           After you submit, the Lightning invoice card will appear here with a QR code, copy invoice, and live payment

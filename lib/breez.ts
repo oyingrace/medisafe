@@ -14,6 +14,7 @@ const DEFAULT_EXPIRY_SECS = 15 * 60;
 
 let sdkModulePromise: Promise<BreezSdkModule> | null = null;
 let sparkSdkPromise: Promise<import("@breeztech/breez-sdk-spark/nodejs").BreezSdk> | null = null;
+let payerSdkPromise: Promise<import("@breeztech/breez-sdk-spark/nodejs").BreezSdk> | null = null;
 
 function isMockMode() {
   if (process.env.BREEZ_MODE === "mock") return true;
@@ -72,6 +73,34 @@ async function getSparkSdk() {
   return sparkSdkPromise;
 }
 
+async function getPayerSdk() {
+  if (!payerSdkPromise) {
+    payerSdkPromise = (async () => {
+      const mod = await getSparkModule();
+      const network = normalizeNetwork(process.env.BREEZ_NETWORK);
+      const mnemonic = process.env.BREEZ_PAYER_MNEMONIC?.trim();
+      if (!mnemonic) {
+        throw new Error("BREEZ_PAYER_MNEMONIC is not set — add a second mnemonic to .env for the payer wallet");
+      }
+      if (mnemonic === process.env.BREEZ_MNEMONIC?.trim()) {
+        throw new Error("BREEZ_PAYER_MNEMONIC must be different from BREEZ_MNEMONIC (self-payment is not allowed)");
+      }
+      const config = mod.defaultConfig(network);
+      const apiKey = process.env.BREEZ_API_KEY?.trim();
+      if (apiKey) config.apiKey = apiKey;
+      const storageDir = (process.env.BREEZ_WORKING_DIR?.trim() || "./breez-data") + "-payer";
+      const sdk = await mod.connect({
+        config,
+        seed: { type: "mnemonic", mnemonic, passphrase: undefined },
+        storageDir,
+      });
+      await sdk.syncWallet({});
+      return sdk;
+    })();
+  }
+  return payerSdkPromise;
+}
+
 function mapSdkStatus(status: string): PaymentStatus {
   if (status === "completed") return "paid";
   if (status === "failed") return "failed";
@@ -114,14 +143,26 @@ export async function createBatchInvoice(batchId: string) {
 
   const sdk = await getSparkSdk();
   await sdk.syncWallet({});
-  const res = await sdk.receivePayment({
-    paymentMethod: {
-      type: "bolt11Invoice",
-      description: `MedSafe batch registration ${batchId}`,
-      amountSats: REGISTRATION_SATS,
-      expirySecs: DEFAULT_EXPIRY_SECS,
-    },
-  });
+  const network = normalizeNetwork(process.env.BREEZ_NETWORK);
+
+  // Regtest doesn't have a live Lightning routing network, so we use
+  // Spark invoices there. Mainnet uses standard BOLT11.
+  const paymentMethod =
+    network === "mainnet"
+      ? ({
+          type: "bolt11Invoice" as const,
+          description: `MedSafe batch registration ${batchId}`,
+          amountSats: REGISTRATION_SATS,
+          expirySecs: DEFAULT_EXPIRY_SECS,
+        } satisfies import("@breeztech/breez-sdk-spark/nodejs").ReceivePaymentMethod)
+      : ({
+          type: "sparkInvoice" as const,
+          description: `MedSafe batch registration ${batchId}`,
+          amount: String(REGISTRATION_SATS),
+          expiryTime: Math.floor(Date.now() / 1000) + DEFAULT_EXPIRY_SECS,
+        } satisfies import("@breeztech/breez-sdk-spark/nodejs").ReceivePaymentMethod);
+
+  const res = await sdk.receivePayment({ paymentMethod });
 
   const invoice = res.paymentRequest;
   const paymentHash = syntheticPaymentHash(invoice);
@@ -131,6 +172,7 @@ export async function createBatchInvoice(batchId: string) {
     paymentHash,
     amountSats: REGISTRATION_SATS,
     mode: "spark" as const,
+    invoiceType: (network === "mainnet" ? "bolt11" : "spark") as "bolt11" | "spark",
   };
 }
 
@@ -164,7 +206,10 @@ export async function checkPaymentStatus(paymentHash: string): Promise<PaymentSt
 
   const hit = list.payments.find((payment) => {
     const details = payment.details;
-    return details?.type === "lightning" && details.invoice === invoice;
+    if (details?.type === "lightning" && details.invoice === invoice) return true;
+    // Spark invoice payments surface under the "spark" detail type
+    if (details?.type === "spark" && details.invoiceDetails?.invoice === invoice) return true;
+    return false;
   });
 
   if (!hit) return "pending";
@@ -242,6 +287,40 @@ function serializePayment(payment: BreezPayment) {
           ? payment.details.htlcDetails?.paymentHash ?? null
           : null,
   };
+}
+
+export async function getPayerFundingAddress() {
+  const sdk = await getPayerSdk();
+  await sdk.syncWallet({});
+  const res = await sdk.receivePayment({ paymentMethod: { type: "bitcoinAddress" } });
+  return {
+    address: res.paymentRequest,
+    network: normalizeNetwork(process.env.BREEZ_NETWORK),
+    note: "Send regtest BTC from https://faucet.lightspark.com to this address, then wait ~1 min for confirmation.",
+  };
+}
+
+export async function payInvoiceFromPayer(invoice: string, amountSats?: number) {
+  const sdk = await getPayerSdk();
+  await sdk.syncWallet({});
+
+  const prepare = await sdk.prepareSendPayment({
+    paymentRequest: invoice.trim(),
+    amount:
+      typeof amountSats === "number" && Number.isFinite(amountSats) && amountSats > 0
+        ? BigInt(Math.floor(amountSats))
+        : undefined,
+  });
+
+  const response = await sdk.sendPayment({
+    prepareResponse: prepare,
+    options:
+      prepare.paymentMethod.type === "bolt11Invoice"
+        ? { type: "bolt11Invoice", preferSpark: true, completionTimeoutSecs: 45 }
+        : undefined,
+  });
+
+  return serializePayment(response.payment);
 }
 
 export async function listSparkPayments(limit = 50) {

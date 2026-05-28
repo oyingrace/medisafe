@@ -18,10 +18,17 @@ interface PaymentModalProps {
   invoice: string;
   paymentHash: string;
   status: "idle" | "pending" | "paid" | "failed";
+  invoiceType?: "bolt11" | "spark";
   onCheckStatus: () => void;
 }
 
-export function PaymentModal({ invoice, paymentHash, status, onCheckStatus }: PaymentModalProps) {
+export function PaymentModal({
+  invoice,
+  paymentHash,
+  status,
+  invoiceType = "bolt11",
+  onCheckStatus,
+}: PaymentModalProps) {
   const [copied, setCopied] = useState(false);
 
   async function copyInvoice() {
@@ -45,13 +52,17 @@ export function PaymentModal({ invoice, paymentHash, status, onCheckStatus }: Pa
       </Badge>
     );
 
+  const isSparkInvoice = invoiceType === "spark";
+
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
         <div>
-          <CardTitle>Lightning payment</CardTitle>
+          <CardTitle>{isSparkInvoice ? "Spark invoice" : "Lightning payment"}</CardTitle>
           <CardDescription>
-            Pay this invoice from your regtest/spark setup, then use “Refresh status” to confirm settlement.
+            {isSparkInvoice
+              ? "Pay via the Spark protocol (regtest). Use paySparkInvoice from your funded wallet, then Refresh status."
+              : "Pay this BOLT11 invoice from any Lightning wallet, then use Refresh status to confirm settlement."}
           </CardDescription>
         </div>
         {statusBadge}
