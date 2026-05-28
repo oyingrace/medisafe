@@ -21,7 +21,7 @@ Counterfeit and substandard drugs are a major cause of preventable deaths in Afr
 
 Medsafe provides an immutable, verifiable, and accessible drug verification network powered by Nostr & Bitcoin.
 
-# How It Works 
+## How It Works 
 
 | Step | Description |
 | --- | --- |
@@ -32,5 +32,16 @@ Medsafe provides an immutable, verifiable, and accessible drug verification netw
 | 5. Instant Response | The user receives either `✅ Verified` or `❌ Not Found — Possible Fake`. |
 | 6. Anomaly Detection | Verification logs are stored (Neon/Postgres) and suspicious spikes (e.g., same batch queried across many regions in short time) are flagged as anomalies (`⚠️`). |
 
+## Technology Stack
 
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Frontend (Admin)** | Next.js 15 + Tailwind CSS + shadcn/ui | Manufacturer dashboard to register and monitor drug batches |
+| **Blockchain Records** | Nostr Protocol (kind 30078) | Immutable, tamper-evident batch registration events |
+| **Anti-Spam / Payment** | Bitcoin Lightning via Breez SDK | Micropayment required to register a batch, preventing fake entries |
+| **Consumer Verification** | Twilio WhatsApp API | Users verify drugs by sending a batch ID or photo via WhatsApp |
+| **OCR / Vision** | Google Gemini 2.5 Flash | Extracts batch IDs from drug packaging photos automatically |
+| **OCR Fallback** | Tesseract.js | Local batch ID extraction when AI is not configured|
+| **Database** | Neon (PostgreSQL) | Stores batch records, verification logs, and anomaly alerts |
+| **Anomaly Detection** | Custom heuristics + Postgres | Flags suspicious verification spikes across regions |
 
