@@ -50,7 +50,9 @@ export function PaymentModal({ invoice, paymentHash, status, onCheckStatus }: Pa
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2 space-y-0">
         <div>
           <CardTitle>Lightning payment</CardTitle>
-          <CardDescription>Demo flow auto-confirms after a few seconds, or retry “Refresh status”. </CardDescription>
+          <CardDescription>
+            Pay this invoice from your regtest/spark setup, then use “Refresh status” to confirm settlement.
+          </CardDescription>
         </div>
         {statusBadge}
       </CardHeader>

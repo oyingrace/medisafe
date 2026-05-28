@@ -17,8 +17,7 @@ let sparkSdkPromise: Promise<import("@breeztech/breez-sdk-spark/nodejs").BreezSd
 
 function isMockMode() {
   if (process.env.BREEZ_MODE === "mock") return true;
-  if (process.env.BREEZ_MODE === "spark") return false;
-  return !process.env.BREEZ_MNEMONIC?.trim();
+  return false;
 }
 
 function normalizeNetwork(value: string | undefined): SparkNetwork {
@@ -256,4 +255,34 @@ export async function listSparkPayments(limit = 50) {
     sortAscending: false,
   });
   return list.payments.map(serializePayment);
+}
+
+export async function paySparkInvoice(invoice: string, amountSats?: number) {
+  if (isMockMode()) {
+    throw new Error("Invoice payment is unavailable in mock mode. Set BREEZ_MODE=spark.");
+  }
+  if (!invoice.trim()) {
+    throw new Error("Invoice is required");
+  }
+
+  const sdk = await getSparkSdk();
+  await sdk.syncWallet({});
+
+  const prepare = await sdk.prepareSendPayment({
+    paymentRequest: invoice.trim(),
+    amount:
+      typeof amountSats === "number" && Number.isFinite(amountSats) && amountSats > 0
+        ? BigInt(Math.floor(amountSats))
+        : undefined,
+  });
+
+  const response = await sdk.sendPayment({
+    prepareResponse: prepare,
+    options:
+      prepare.paymentMethod.type === "bolt11Invoice"
+        ? { type: "bolt11Invoice", preferSpark: true, completionTimeoutSecs: 45 }
+        : undefined,
+  });
+
+  return serializePayment(response.payment);
 }
