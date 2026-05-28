@@ -3,7 +3,9 @@ import { extractBatchIdFromImage, extractBatchIdFromText } from "@/lib/ocr";
 import {
   deriveRegionHint,
   formatWhatsAppVerificationMessage,
+  isGreeting,
   sendWhatsAppMessage,
+  WELCOME_MESSAGE,
 } from "@/lib/twilio";
 
 export const runtime = "nodejs";
@@ -13,6 +15,15 @@ export async function POST(req: Request) {
   const body = String(formData.get("Body") ?? "");
   const from = String(formData.get("From") ?? "");
   const mediaUrl = formData.get("MediaUrl0");
+
+  // Respond to greetings with the welcome message
+  if (isGreeting(body) && !mediaUrl) {
+    await sendWhatsAppMessage(from, WELCOME_MESSAGE);
+    return new NextResponse(
+      `<Response><Message>${WELCOME_MESSAGE}</Message></Response>`,
+      { headers: { "Content-Type": "text/xml" } },
+    );
+  }
 
   let batchId: string | null = extractBatchIdFromText(body);
   if (!batchId && mediaUrl) {
