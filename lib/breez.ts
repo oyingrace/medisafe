@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 type BreezSdkModule = typeof import("@breeztech/breez-sdk-spark/nodejs");
 type SparkNetwork = "regtest" | "mainnet";
 type PaymentStatus = "pending" | "paid" | "failed";
+type BreezPayment = import("@breeztech/breez-sdk-spark/nodejs").Payment;
 
 const paidHashes = new Set<string>();
 const paymentCreatedAt = new Map<string, number>();
@@ -76,6 +77,12 @@ function mapSdkStatus(status: string): PaymentStatus {
   if (status === "completed") return "paid";
   if (status === "failed") return "failed";
   return "pending";
+}
+
+function toNumberSafe(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "bigint") return Number(value);
+  return fallback;
 }
 
 export async function initBreezSDK() {
@@ -191,4 +198,62 @@ export async function getBreezDebugStatus() {
     balanceSats: Number(info.balanceSats ?? 0),
     tokenCount: info.tokenBalances?.size ?? 0,
   };
+}
+
+export async function getSparkFundingAddress() {
+  if (isMockMode()) {
+    throw new Error("Funding address is unavailable in mock mode. Set BREEZ_MODE=spark.");
+  }
+  const sdk = await getSparkSdk();
+  await sdk.syncWallet({});
+  const res = await sdk.receivePayment({
+    paymentMethod: {
+      type: "bitcoinAddress",
+    },
+  });
+  return {
+    address: res.paymentRequest,
+    feeSats: toNumberSafe(res.fee),
+    network: normalizeNetwork(process.env.BREEZ_NETWORK),
+  };
+}
+
+function serializePayment(payment: BreezPayment) {
+  return {
+    id: payment.id,
+    paymentType: payment.paymentType,
+    status: payment.status,
+    amountSats: toNumberSafe(payment.amount),
+    feesSats: toNumberSafe(payment.fees),
+    timestamp: payment.timestamp,
+    method: payment.method,
+    detailsType: payment.details?.type ?? null,
+    invoice:
+      payment.details?.type === "lightning"
+        ? payment.details.invoice
+        : payment.details?.type === "spark"
+          ? payment.details.invoiceDetails?.invoice ?? null
+          : payment.details?.type === "token"
+            ? payment.details.invoiceDetails?.invoice ?? null
+            : null,
+    paymentHash:
+      payment.details?.type === "lightning"
+        ? payment.details.paymentHash
+        : payment.details?.type === "spark"
+          ? payment.details.htlcDetails?.paymentHash ?? null
+          : null,
+  };
+}
+
+export async function listSparkPayments(limit = 50) {
+  if (isMockMode()) {
+    return [];
+  }
+  const sdk = await getSparkSdk();
+  await sdk.syncWallet({});
+  const list = await sdk.listPayments({
+    limit: Math.max(1, Math.min(200, Math.floor(limit))),
+    sortAscending: false,
+  });
+  return list.payments.map(serializePayment);
 }
