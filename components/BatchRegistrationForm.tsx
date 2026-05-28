@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +31,7 @@ const formSchema = z.object({
 });
 
 export function BatchRegistrationForm() {
+  const router = useRouter();
   const [form, setForm] = useState({
     batchId: "",
     drugName: "",
@@ -40,6 +43,7 @@ export function BatchRegistrationForm() {
   const [paymentHash, setPaymentHash] = useState("");
   const [invoiceType, setInvoiceType] = useState<"bolt11" | "spark">("bolt11");
   const [status, setStatus] = useState<"idle" | "pending" | "paid" | "failed">("idle");
+  const [submitting, setSubmitting] = useState(false);
   const [nostrEventId, setNostrEventId] = useState("");
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -60,22 +64,27 @@ export function BatchRegistrationForm() {
       return;
     }
 
-    const payload = parsed.data;
-    const resp = await fetch("/api/register-batch", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const data = await resp.json();
-    if (!resp.ok) {
-      setError(data.error ?? "Failed to create invoice");
-      return;
+    setSubmitting(true);
+    try {
+      const payload = parsed.data;
+      const resp = await fetch("/api/register-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        setError(data.error ?? "Failed to create invoice");
+        return;
+      }
+      setInvoice(data.invoice);
+      setPaymentHash(data.paymentHash);
+      if (data.invoiceType === "spark") setInvoiceType("spark");
+      else setInvoiceType("bolt11");
+      setStatus("pending");
+    } finally {
+      setSubmitting(false);
     }
-    setInvoice(data.invoice);
-    setPaymentHash(data.paymentHash);
-    if (data.invoiceType === "spark") setInvoiceType("spark");
-    else setInvoiceType("bolt11");
-    setStatus("pending");
   }
 
   const checkStatus = useCallback(async () => {
@@ -94,8 +103,12 @@ export function BatchRegistrationForm() {
       return;
     }
     setError("");
-    setStatus(data.status ?? "pending");
+    const newStatus = data.status ?? "pending";
+    setStatus(newStatus);
     if (data.nostrEventId) setNostrEventId(data.nostrEventId);
+    if (newStatus === "paid") {
+      window.setTimeout(() => router.push("/batches"), 1500);
+    }
   }, [paymentHash]);
 
   useEffect(() => {
@@ -191,8 +204,15 @@ export function BatchRegistrationForm() {
             </div>
           </CardContent>
           <CardFooter className="flex-col items-start gap-3 border-t pt-6">
-            <Button type="submit" className="bg-green-600 hover:bg-green-700">
-              Create invoice
+            <Button type="submit" disabled={submitting} className="bg-green-600 hover:bg-green-700">
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Creating invoice…
+                </>
+              ) : (
+                "Create invoice"
+              )}
             </Button>
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             {nostrEventId ? (
