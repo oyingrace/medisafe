@@ -73,7 +73,7 @@ Medsafe provides an immutable, verifiable, and accessible drug verification netw
 ## HOW TO USE THE WHATSAPP BOT
 1. On WhatsApp, start a chat with this number +1 (415) 523-8886
 2. Send this message, join war-natural to join my sandbox
-3. Send Hi Medsafe (or a greeting), to receive basic instructions on how to go about verification
+3. Send Hi Medsafe, to receive basic instructions on how to go about verification
 4. Then you can go ahead and use it**
 
 ## 🛠️ Installation & Setup
