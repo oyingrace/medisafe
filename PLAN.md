@@ -218,5 +218,3 @@ Phase 4: Polish components + PaymentModal
   ↓
 Phase 5: End-to-end demo test + ngrok setup
 ```
-
-**Total estimated build time**: 2–3 focused days for a working hackathon demo.
