@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { extractBatchIdFromImage, extractBatchIdFromText } from "@/lib/ocr";
+import { verifyBatch } from "@/lib/verify";
 import {
   deriveRegionHint,
   formatWhatsAppVerificationMessage,
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   const from = String(formData.get("From") ?? "");
   const mediaUrl = formData.get("MediaUrl0");
 
-  // Greetings → welcome message (TwiML only — no extra API call)
+  // Greetings → welcome message
   if (isGreeting(body) && !mediaUrl) {
     return twiml(WELCOME_MESSAGE);
   }
@@ -44,15 +45,10 @@ export async function POST(req: Request) {
     return twiml("⚠️ Could not read a batch ID. Please send a clear photo or type the ID (e.g. B260500).");
   }
 
-  const verifyUrl = new URL("/api/verify-batch", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000");
-  verifyUrl.searchParams.set("batchId", batchId);
-  verifyUrl.searchParams.set("userPhone", from);
+  // Call verification logic directly — no internal HTTP fetch
   const regionHint = deriveRegionHint(from);
-  if (regionHint) verifyUrl.searchParams.set("region", regionHint);
-
-  const verifyResp = await fetch(verifyUrl.toString(), { method: "GET" });
-  const verifyBody = (await verifyResp.json()) as { status: "verified" | "fake" | "anomaly" };
-  const reply = formatWhatsAppVerificationMessage(verifyBody.status, batchId);
+  const result = await verifyBatch(batchId, from, regionHint);
+  const reply = formatWhatsAppVerificationMessage(result.status, batchId);
 
   return twiml(reply);
 }
